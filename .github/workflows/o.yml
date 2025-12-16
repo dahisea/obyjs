@@ -29,11 +29,10 @@ jobs:
         with:
           fetch-depth: 0
       
-      - name: Setup Node.js (without cache)
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          # 暂时移除缓存，避免路径问题
       
       - name: Create minimal package.json
         run: |
@@ -42,23 +41,23 @@ jobs:
           # 创建或更新 package.json
           if [ ! -f "package.json" ]; then
             cat > package.json << 'EOF'
-            {
-              "name": "js-obfuscator-workflow",
-              "version": "1.0.0",
-              "description": "Workflow for JavaScript obfuscation",
-              "private": true,
-              "main": "y.js",
-              "scripts": {
-                "obfuscate": "npx javascript-obfuscator raw.js --output y.js"
-              },
-              "devDependencies": {
-                "javascript-obfuscator": "^4.1.1"
-              },
-              "keywords": ["obfuscation", "javascript", "security"],
-              "author": "GitHub Actions",
-              "license": "MIT"
-            }
-            EOF
+{
+  "name": "js-obfuscator-workflow",
+  "version": "1.0.0",
+  "description": "Workflow for JavaScript obfuscation",
+  "private": true,
+  "main": "y.js",
+  "scripts": {
+    "obfuscate": "npx javascript-obfuscator raw.js --output y.js"
+  },
+  "devDependencies": {
+    "javascript-obfuscator": "^4.1.1"
+  },
+  "keywords": ["obfuscation", "javascript", "security"],
+  "author": "GitHub Actions",
+  "license": "MIT"
+}
+EOF
             echo "✓ Created package.json"
           else
             echo "✓ package.json already exists"
@@ -88,22 +87,12 @@ jobs:
           echo "=== Dependencies Installed ==="
           echo "Node version: $(node --version)"
           echo "NPM version: $(npm --version)"
-          echo "javascript-obfuscator version:"
-          npx javascript-obfuscator --version || echo "Version check failed, but installation successful"
+          npx javascript-obfuscator --version
           
           # 显示生成的 lock 文件
           if [ -f "package-lock.json" ]; then
             echo "✓ package-lock.json created"
-            echo "Size: $(wc -c < package-lock.json) bytes"
           fi
-      
-      - name: Setup Node.js cache (after package.json exists)
-        id: cache-npm
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: 'package.json'  # 使用确切文件名
       
       - name: Verify raw.js exists
         run: |
@@ -113,20 +102,12 @@ jobs:
             echo "❌ Error: raw.js not found!"
             echo "Current directory contents:"
             ls -la
-            echo ""
-            echo "Please ensure raw.js exists in the repository root."
             exit 1
           fi
           
           echo "✓ raw.js found"
           echo "File size: $(wc -c < raw.js) bytes"
           echo "Line count: $(wc -l < raw.js) lines"
-          echo ""
-          
-          # 显示文件开头（用于调试）
-          echo "=== First 3 lines of raw.js ==="
-          head -3 raw.js
-          echo "..."
       
       - name: Obfuscate raw.js to y.js
         id: obfuscate
@@ -219,7 +200,6 @@ jobs:
           echo "File: y.js"
           echo "Size: $FILE_SIZE bytes"
           echo "Lines: $FILE_LINES lines"
-          echo ""
           
           # 检查是否为空
           if [ $FILE_SIZE -eq 0 ]; then
@@ -233,14 +213,12 @@ jobs:
             echo "✅ y.js has valid JavaScript syntax"
           else
             echo "⚠️  Syntax check warning (may be due to browser-specific code)"
-            echo "Continuing anyway..."
           fi
           
           # 显示文件开头
           echo ""
-          echo "=== Preview of y.js (first 5 lines) ==="
-          head -5 y.js
-          echo "..."
+          echo "=== Preview of y.js (first 3 lines) ==="
+          head -3 y.js
       
       - name: Create GitHub summary report
         run: |
@@ -273,8 +251,6 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           
           echo "## ⚙️ Obfuscation Configuration" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Core Settings" >> $GITHUB_STEP_SUMMARY
           echo "- **Control Flow Flattening:** Enabled (20% threshold)" >> $GITHUB_STEP_SUMMARY
           echo "- **String Array:** Enabled (60% threshold)" >> $GITHUB_STEP_SUMMARY
           echo "- **String Splitting:** Enabled (12 character chunks)" >> $GITHUB_STEP_SUMMARY
@@ -282,32 +258,15 @@ jobs:
           echo "- **Target Environment:** Browser" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
-          echo "### 🔒 Protected Browser APIs" >> $GITHUB_STEP_SUMMARY
-          echo "The following browser APIs were preserved to ensure compatibility:" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "```javascript" >> $GITHUB_STEP_SUMMARY
-          echo "// HTTP & Network" >> $GITHUB_STEP_SUMMARY
-          echo "fetch, XMLHttpRequest, axios" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "// DOM & Browser" >> $GITHUB_STEP_SUMMARY
-          echo "document, window, localStorage, sessionStorage" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "// Core JavaScript" >> $GITHUB_STEP_SUMMARY
-          echo "console, JSON, Promise, Date, Math, Object, Array" >> $GITHUB_STEP_SUMMARY
-          echo "```" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
           echo "## 📁 Generated Files" >> $GITHUB_STEP_SUMMARY
           echo "- **Input:** [`raw.js`](${{ github.server_url }}/${{ github.repository }}/blob/${{ github.sha }}/raw.js) ($ORIGINAL_SIZE bytes)" >> $GITHUB_STEP_SUMMARY
           echo "- **Output:** [`y.js`](${{ github.server_url }}/${{ github.repository }}/blob/${{ github.sha }}/y.js) ($OBFUSCATED_SIZE bytes)" >> $GITHUB_STEP_SUMMARY
-          echo "- **Configuration:** [`package.json`](${{ github.server_url }}/${{ github.repository }}/blob/${{ github.sha }}/package.json) (auto-generated)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
           echo "## 🚀 Quick Test" >> $GITHUB_STEP_SUMMARY
           echo '```bash' >> $GITHUB_STEP_SUMMARY
           echo "# Verify the output file" >> $GITHUB_STEP_SUMMARY
-          echo "file y.js" >> $GITHUB_STEP_SUMMARY
-          echo "head -c 200 y.js  # First 200 characters" >> $GITHUB_STEP_SUMMARY
+          echo "ls -la y.js" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
       
       - name: Commit changes
@@ -319,11 +278,10 @@ jobs:
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           
-          echo "Current branch: ${{ github.ref_name }}"
           echo "Checking for changes..."
           
-          # 添加所有生成的文件
-          git add -A
+          # 添加文件
+          git add y.js package.json package-lock.json
           
           # 检查是否有更改
           if git diff --cached --quiet; then
@@ -331,27 +289,17 @@ jobs:
           else
             echo "Changes detected, creating commit..."
             
-            # 获取统计信息
-            DURATION=${{ steps.obfuscate.outputs.duration }}
-            SIZE_INCREASE=${{ steps.obfuscate.outputs.size_increase }}
-            
             # 创建提交信息
-            git commit -m "🔒 chore: obfuscate JavaScript files
+            git commit -m "🔒 chore: obfuscate raw.js to y.js
 
-            Obfuscated raw.js → y.js
-            • Processing time: ${DURATION}s
-            • Size increase: +${SIZE_INCREASE}%
-            • Protection: Self-defending, string array, control flow flattening
-            • Target: Browser environment
-            
-            Auto-generated by GitHub Actions"
+            Generated by GitHub Actions workflow"
             
             # 推送到仓库
-            echo "Pushing to ${{ github.ref_name }}..."
+            echo "Pushing changes..."
             git pull --rebase origin ${{ github.ref_name }}
             git push origin HEAD:${{ github.ref_name }}
             
-            echo "✅ Changes committed and pushed successfully"
+            echo "✅ Changes committed and pushed"
           fi
       
       - name: Upload artifacts
@@ -361,19 +309,4 @@ jobs:
           path: |
             y.js
             raw.js
-            package.json
-            package-lock.json
           retention-days: 7
-          if-no-files-found: warn
-          compression-level: 9
-      
-      - name: Final status
-        if: always()
-        run: |
-          echo "=== Workflow Completed ==="
-          echo "Status: ${{ job.status }}"
-          echo ""
-          echo "Generated files:"
-          ls -la | grep -E '\.(js|json)$'
-          echo ""
-          echo "🎉 Obfuscation workflow finished!"
