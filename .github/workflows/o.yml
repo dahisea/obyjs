@@ -1,0 +1,224 @@
+name: Obfuscate Web JavaScript
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'raw.js'
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'raw.js'
+  workflow_dispatch:
+    inputs:
+      skip_commit:
+        description: '跳过提交更改'
+        required: false
+        default: 'false'
+
+jobs:
+  obfuscate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Install javascript-obfuscator
+        run: |
+          npm install --save-dev javascript-obfuscator
+          echo "javascript-obfuscator version:"
+          npx javascript-obfuscator --version
+      
+      - name: Verify raw.js exists
+        run: |
+          if [ ! -f "raw.js" ]; then
+            echo "Error: raw.js not found!"
+            echo "Available files:"
+            ls -la
+            exit 1
+          fi
+          echo "raw.js size: $(wc -c < raw.js) bytes"
+          echo "raw.js lines: $(wc -l < raw.js)"
+      
+      - name: Obfuscate raw.js to y.js
+        run: |
+          npx javascript-obfuscator raw.js --output y.js \
+          --compact true \
+          --control-flow-flattening true \
+          --control-flow-flattening-threshold 0.2 \
+          --dead-code-injection false \
+          --identifier-names-generator mangled \
+          --rename-globals false \
+          --self-defending true \
+          --debug-protection false \
+          --debug-protection-interval false \
+          --disable-console-output false \
+          --string-array true \
+          --string-array-encoding false \
+          --string-array-threshold 0.6 \
+          --string-array-indexes-type hexadecimal \
+          --split-strings true \
+          --split-strings-chunk-length 12 \
+          --transform-object-keys false \
+          --unicode-escape-sequence false \
+          --reserved-names 'fetch,XMLHttpRequest,axios,document,window,localStorage,sessionStorage,console,JSON,Promise,setTimeout,setInterval' \
+          --reserved-strings 'https://,http://,api/,Bearer,Authorization,Content-Type,application/json,multipart/form-data' \
+          --domain-lock '' \
+          --target 'browser' \
+          --simplify true \
+          --log false \
+          --source-map false \
+          --source-map-base-url '' \
+          --source-map-file-name '' \
+          --source-map-mode 'separate'
+        
+        env:
+          NODE_OPTIONS: "--max-old-space-size=4096"
+      
+      - name: Validate obfuscated output
+        run: |
+          if [ ! -f "y.js" ]; then
+            echo "Error: y.js was not created!"
+            exit 1
+          fi
+          
+          echo "=== Obfuscation Results ==="
+          echo "y.js size: $(wc -c < y.js) bytes"
+          echo "y.js lines: $(wc -l < y.js)"
+          
+          # 检查文件是否为空
+          if [ ! -s "y.js" ]; then
+            echo "Error: y.js is empty!"
+            exit 1
+          fi
+          
+          # 简单的语法检查
+          echo "Running basic JavaScript syntax check..."
+          if node -c y.js; then
+            echo "✓ y.js has valid JavaScript syntax"
+          else
+            echo "✗ y.js has syntax errors"
+            exit 1
+          fi
+          
+          # 对比原始和混淆后的大小
+          ORIGINAL_SIZE=$(wc -c < raw.js)
+          OBFUSCATED_SIZE=$(wc -c < y.js)
+          SIZE_INCREASE=$((OBFUSCATED_SIZE * 100 / ORIGINAL_SIZE - 100))
+          echo "Size increase: $SIZE_INCREASE%"
+      
+      - name: Test obfuscated code (basic)
+        run: |
+          echo "Creating test file..."
+          cat > test_obfuscated.js << 'EOF'
+          // 简单的测试，确保代码能加载
+          try {
+            // 创建一个虚拟的浏览器环境
+            global.window = { location: { href: 'https://example.com' } };
+            global.document = { createElement: () => ({}) };
+            global.localStorage = { getItem: () => null, setItem: () => {} };
+            global.sessionStorage = { getItem: () => null, setItem: () => {} };
+            
+            // 加载混淆后的代码
+            require('./y.js');
+            console.log('✓ Obfuscated code loaded successfully');
+          } catch (error) {
+            console.error('✗ Error loading obfuscated code:', error.message);
+            process.exit(1);
+          }
+          EOF
+          
+          node test_obfuscated.js
+          rm test_obfuscated.js
+      
+      - name: Create comparison report
+        run: |
+          echo "## Obfuscation Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Input:** raw.js" >> $GITHUB_STEP_SUMMARY
+          echo "**Output:** y.js" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### File Statistics" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | raw.js | y.js | Change |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|--------|------|--------|" >> $GITHUB_STEP_SUMMARY
+          
+          ORIGINAL_SIZE=$(wc -c < raw.js)
+          OBFUSCATED_SIZE=$(wc -c < y.js)
+          SIZE_CHANGE=$((OBFUSCATED_SIZE - ORIGINAL_SIZE))
+          SIZE_PERCENT=$((OBFUSCATED_SIZE * 100 / ORIGINAL_SIZE))
+          
+          ORIGINAL_LINES=$(wc -l < raw.js)
+          OBFUSCATED_LINES=$(wc -l < y.js)
+          LINE_CHANGE=$((OBFUSCATED_LINES - ORIGINAL_LINES))
+          
+          echo "| Size | $ORIGINAL_SIZE bytes | $OBFUSCATED_SIZE bytes | +$SIZE_CHANGE bytes (+$((SIZE_PERCENT - 100))%) |" >> $GITHUB_STEP_SUMMARY
+          echo "| Lines | $ORIGINAL_LINES | $OBFUSCATED_LINES | +$LINE_CHANGE |" >> $GITHUB_STEP_SUMMARY
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Obfuscation Settings" >> $GITHUB_STEP_SUMMARY
+          echo "- Control Flow Flattening: Enabled (threshold: 0.2)" >> $GITHUB_STEP_SUMMARY
+          echo "- String Array: Enabled (threshold: 0.6)" >> $GITHUB_STEP_SUMMARY
+          echo "- String Splitting: Enabled (chunk length: 12)" >> $GITHUB_STEP_SUMMARY
+          echo "- Self Defending: Enabled" >> $GITHUB_STEP_SUMMARY
+          echo "- Target: Browser" >> $GITHUB_STEP_SUMMARY
+      
+      - name: Commit changes
+        if: github.event_name == 'push' && github.event.inputs.skip_commit != 'true'
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          
+          # 检查是否有更改
+          git add y.js
+          
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore: obfuscate raw.js to y.js
+          
+          - Obfuscated using javascript-obfuscator
+          - Target: browser environment
+          - Preserved browser APIs
+          - Added self-defending protection
+          
+          Generated by GitHub Actions"
+            
+            # 尝试推送，如果失败可能是因为并发修改
+            for i in {1..3}; do
+              if git pull --rebase origin ${{ github.ref }}; then
+                if git push origin HEAD:${{ github.ref }}; then
+                  echo "Successfully pushed changes"
+                  break
+                fi
+              fi
+              echo "Push attempt $i failed, retrying in 2 seconds..."
+              sleep 2
+            done
+          fi
+      
+      - name: Upload y.js as artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: obfuscated-js
+          path: y.js
+          retention-days: 7
+      
+      - name: Create PR with changes
+        if: github.event_name == 'pull_request'
+        run: |
+          echo "This is a PR, changes are ready for review"
+          echo "Obfuscated file: y.js"
+          ls -la y.js
