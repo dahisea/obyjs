@@ -1,312 +1,62 @@
-name: Obfuscate Web JavaScript
+name: Obfuscate JavaScript
 
 on:
   push:
     branches: [main, master]
     paths:
       - 'raw.js'
-  pull_request:
-    branches: [main, master]
-    paths:
-      - 'raw.js'
   workflow_dispatch:
-    inputs:
-      skip_commit:
-        description: '跳过提交更改'
-        required: false
-        default: 'false'
 
 jobs:
   obfuscate:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      pull-requests: write
     
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
       
-      - name: Create minimal package.json
+      - name: Obfuscate raw.js
         run: |
-          echo "Creating package.json..."
-          
-          # 创建或更新 package.json
-          if [ ! -f "package.json" ]; then
-            cat > package.json << 'EOF'
-{
-  "name": "js-obfuscator-workflow",
-  "version": "1.0.0",
-  "description": "Workflow for JavaScript obfuscation",
-  "private": true,
-  "main": "y.js",
-  "scripts": {
-    "obfuscate": "npx javascript-obfuscator raw.js --output y.js"
-  },
-  "devDependencies": {
-    "javascript-obfuscator": "^4.1.1"
-  },
-  "keywords": ["obfuscation", "javascript", "security"],
-  "author": "GitHub Actions",
-  "license": "MIT"
-}
-EOF
-            echo "✓ Created package.json"
-          else
-            echo "✓ package.json already exists"
-          fi
-          
-          # 显示 package.json 内容
-          echo "package.json content:"
-          cat package.json
-      
-      - name: Install javascript-obfuscator
-        run: |
-          echo "Installing dependencies..."
-          echo "Current directory: $(pwd)"
-          echo "Files in directory:"
-          ls -la
-          
-          # 检查 package.json 是否存在
-          if [ ! -f "package.json" ]; then
-            echo "❌ Error: package.json not found"
-            exit 1
-          fi
-          
-          # 安装依赖
-          npm install --no-fund --no-audit --progress=false
-          
-          # 验证安装
-          echo "=== Dependencies Installed ==="
-          echo "Node version: $(node --version)"
-          echo "NPM version: $(npm --version)"
-          npx javascript-obfuscator --version
-          
-          # 显示生成的 lock 文件
-          if [ -f "package-lock.json" ]; then
-            echo "✓ package-lock.json created"
-          fi
-      
-      - name: Verify raw.js exists
-        run: |
-          echo "=== Checking input file ==="
-          
-          if [ ! -f "raw.js" ]; then
-            echo "❌ Error: raw.js not found!"
-            echo "Current directory contents:"
-            ls -la
-            exit 1
-          fi
-          
-          echo "✓ raw.js found"
-          echo "File size: $(wc -c < raw.js) bytes"
-          echo "Line count: $(wc -l < raw.js) lines"
-      
-      - name: Obfuscate raw.js to y.js
-        id: obfuscate
-        run: |
-          echo "🚀 Starting obfuscation..."
-          echo "Input: raw.js"
-          echo "Output: y.js"
-          echo ""
-          
-          # 记录开始时间
-          START_TIME=$(date +%s)
-          
-          # 备份原始文件大小
-          ORIGINAL_SIZE=$(wc -c < raw.js)
-          
-          # 运行混淆
-          echo "Running javascript-obfuscator..."
           npx javascript-obfuscator raw.js --output y.js \
-          --compact true \
-          --control-flow-flattening true \
-          --control-flow-flattening-threshold 0.2 \
-          --dead-code-injection false \
-          --identifier-names-generator mangled \
-          --rename-globals false \
-          --self-defending true \
-          --debug-protection false \
-          --debug-protection-interval false \
-          --disable-console-output false \
-          --string-array true \
-          --string-array-encoding false \
-          --string-array-threshold 0.6 \
-          --string-array-indexes-type hexadecimal \
-          --split-strings true \
-          --split-strings-chunk-length 12 \
-          --transform-object-keys false \
-          --unicode-escape-sequence false \
-          --reserved-names 'fetch,XMLHttpRequest,axios,document,window,localStorage,sessionStorage,console,JSON,Promise,setTimeout,setInterval,Date,Math,Object,Array,String,Number,Boolean,RegExp,Error' \
-          --reserved-strings 'https://,http://,api/,Bearer,Authorization,Content-Type,application/json,multipart/form-data,text/plain,GET,POST,PUT,DELETE' \
-          --domain-lock '' \
-          --target 'browser' \
-          --simplify true \
-          --log false \
-          --source-map false \
-          --force-transform-strings false \
-          --numbers-to-expressions false
+            --compact true \
+            --control-flow-flattening true \
+            --control-flow-flattening-threshold 0.75 \
+            --dead-code-injection true \
+            --dead-code-injection-threshold 0.4 \
+            --string-array true \
+            --string-array-threshold 0.75 \
+            --string-array-encoding base64 \
+            --string-array-wrappers-count 2 \
+            --string-array-wrappers-type function \
+            --self-defending true \
+            --split-strings true \
+            --split-strings-chunk-length 10 \
+            --identifier-names-generator hexadecimal \
+            --rename-globals true \
+            --transform-object-keys true \
+            --unicode-escape-sequence false \
+            --simplify true \
+            --target browser
           
-          # 检查是否成功
-          if [ ! -f "y.js" ]; then
-            echo "❌ Error: y.js was not created!"
-            exit 1
-          fi
-          
-          # 记录结束时间
-          END_TIME=$(date +%s)
-          DURATION=$((END_TIME - START_TIME))
-          
-          # 获取混淆后文件大小
-          OBFUSCATED_SIZE=$(wc -c < y.js)
-          
-          # 计算百分比
-          SIZE_INCREASE=$(echo "scale=2; ($OBFUSCATED_SIZE - $ORIGINAL_SIZE) * 100 / $ORIGINAL_SIZE" | bc)
-          
-          # 设置输出变量
-          echo "duration=$DURATION" >> $GITHUB_OUTPUT
-          echo "original_size=$ORIGINAL_SIZE" >> $GITHUB_OUTPUT
-          echo "obfuscated_size=$OBFUSCATED_SIZE" >> $GITHUB_OUTPUT
-          echo "size_increase=$SIZE_INCREASE" >> $GITHUB_OUTPUT
-          
-          echo ""
-          echo "✅ Obfuscation completed!"
-          echo "⏱️  Duration: ${DURATION} seconds"
-          echo "📊 Size: ${ORIGINAL_SIZE} bytes → ${OBFUSCATED_SIZE} bytes (+${SIZE_INCREASE}%)"
-        
-        env:
-          NODE_OPTIONS: "--max-old-space-size=4096"
+          echo "✅ Obfuscation completed: y.js"
       
-      - name: Validate obfuscated output
+      - name: Commit obfuscated file
         run: |
-          echo "=== Validating Output ==="
-          
-          if [ ! -f "y.js" ]; then
-            echo "❌ Error: y.js not found"
-            exit 1
-          fi
-          
-          # 基本检查
-          FILE_SIZE=$(wc -c < y.js)
-          FILE_LINES=$(wc -l < y.js)
-          
-          echo "File: y.js"
-          echo "Size: $FILE_SIZE bytes"
-          echo "Lines: $FILE_LINES lines"
-          
-          # 检查是否为空
-          if [ $FILE_SIZE -eq 0 ]; then
-            echo "❌ Error: y.js is empty!"
-            exit 1
-          fi
-          
-          # 语法检查
-          echo "Running JavaScript syntax check..."
-          if node -c y.js 2>/dev/null; then
-            echo "✅ y.js has valid JavaScript syntax"
-          else
-            echo "⚠️  Syntax check warning (may be due to browser-specific code)"
-          fi
-          
-          # 显示文件开头
-          echo ""
-          echo "=== Preview of y.js (first 3 lines) ==="
-          head -3 y.js
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add y.js
+          git diff --cached --quiet || git commit -m "🔒 Update obfuscated code"
+          git push
       
-      - name: Create GitHub summary report
-        run: |
-          DURATION=${{ steps.obfuscate.outputs.duration }}
-          ORIGINAL_SIZE=${{ steps.obfuscate.outputs.original_size }}
-          OBFUSCATED_SIZE=${{ steps.obfuscate.outputs.obfuscated_size }}
-          SIZE_INCREASE=${{ steps.obfuscate.outputs.size_increase }}
-          
-          # 计算行数
-          ORIGINAL_LINES=$(wc -l < raw.js)
-          OBFUSCATED_LINES=$(wc -l < y.js)
-          LINE_INCREASE=$(echo "scale=2; ($OBFUSCATED_LINES - $ORIGINAL_LINES) * 100 / $ORIGINAL_LINES" | bc)
-          
-          echo "# 🛡️ JavaScript Obfuscation Report" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          echo "## 📊 Summary" >> $GITHUB_STEP_SUMMARY
-          echo "| Item | Details |" >> $GITHUB_STEP_SUMMARY
-          echo "|------|---------|" >> $GITHUB_STEP_SUMMARY
-          echo "| **Status** | ✅ Success |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Processing Time** | $DURATION seconds |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Generated At** | $(date -u '+%Y-%m-%d %H:%M:%S UTC') |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          echo "## 📈 File Statistics" >> $GITHUB_STEP_SUMMARY
-          echo "| Metric | raw.js | y.js | Change |" >> $GITHUB_STEP_SUMMARY
-          echo "|--------|--------|------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| **File Size** | $ORIGINAL_SIZE bytes | $OBFUSCATED_SIZE bytes | **+$SIZE_INCREASE%** |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Line Count** | $ORIGINAL_LINES lines | $OBFUSCATED_LINES lines | **+$LINE_INCREASE%** |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          echo "## ⚙️ Obfuscation Configuration" >> $GITHUB_STEP_SUMMARY
-          echo "- **Control Flow Flattening:** Enabled (20% threshold)" >> $GITHUB_STEP_SUMMARY
-          echo "- **String Array:** Enabled (60% threshold)" >> $GITHUB_STEP_SUMMARY
-          echo "- **String Splitting:** Enabled (12 character chunks)" >> $GITHUB_STEP_SUMMARY
-          echo "- **Self Defending:** Enabled (anti-debugging)" >> $GITHUB_STEP_SUMMARY
-          echo "- **Target Environment:** Browser" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          echo "## 📁 Generated Files" >> $GITHUB_STEP_SUMMARY
-          echo "- **Input:** [`raw.js`](${{ github.server_url }}/${{ github.repository }}/blob/${{ github.sha }}/raw.js) ($ORIGINAL_SIZE bytes)" >> $GITHUB_STEP_SUMMARY
-          echo "- **Output:** [`y.js`](${{ github.server_url }}/${{ github.repository }}/blob/${{ github.sha }}/y.js) ($OBFUSCATED_SIZE bytes)" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          echo "## 🚀 Quick Test" >> $GITHUB_STEP_SUMMARY
-          echo '```bash' >> $GITHUB_STEP_SUMMARY
-          echo "# Verify the output file" >> $GITHUB_STEP_SUMMARY
-          echo "ls -la y.js" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-      
-      - name: Commit changes
-        if: github.event_name == 'push' && github.event.inputs.skip_commit != 'true'
-        run: |
-          echo "=== Committing Changes ==="
-          
-          # 配置 git
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
-          
-          echo "Checking for changes..."
-          
-          # 添加文件
-          git add y.js package.json package-lock.json
-          
-          # 检查是否有更改
-          if git diff --cached --quiet; then
-            echo "No changes to commit"
-          else
-            echo "Changes detected, creating commit..."
-            
-            # 创建提交信息
-            git commit -m "🔒 chore: obfuscate raw.js to y.js
-
-            Generated by GitHub Actions workflow"
-            
-            # 推送到仓库
-            echo "Pushing changes..."
-            git pull --rebase origin ${{ github.ref_name }}
-            git push origin HEAD:${{ github.ref_name }}
-            
-            echo "✅ Changes committed and pushed"
-          fi
-      
-      - name: Upload artifacts
+      - name: Upload obfuscated file
         uses: actions/upload-artifact@v4
         with:
-          name: obfuscated-javascript
-          path: |
-            y.js
-            raw.js
-          retention-days: 7
+          name: obfuscated-js
+          path: y.js
