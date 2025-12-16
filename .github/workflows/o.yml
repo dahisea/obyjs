@@ -210,7 +210,7 @@ jobs:
           fi
       
       - name: Upload y.js as artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: obfuscated-js
           path: y.js
