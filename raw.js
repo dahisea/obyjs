@@ -1,1 +1,573 @@
-!function(){const t=!1,e=(...e)=>{t},n=(...e)=>{t};let s="",a=null;const i=[{name:"NODE_M",url:"https://web-static-origin.dahi.edu.cn.dahi.e.yu.ac.cn/gftls",method:"POST"}],o=[{name:"NODE_A",url:"https://api-edge-sakiko-dispatch-network-aws-nf-cdn.dahi.edu.eu.org/318895e9-64a7-4441-9ee4-625cae200f9b",method:"GET"},{name:"NODE_B",url:"https://tencent.api-edge-sakiko-dispatch-network-aws-cdn.dahi.edu.eu.org/318895e9-64a7-4441-9ee4-625cae200f9b",method:"GET"},{name:"NODE_C",url:"https://api-edge-sakiko-dispatch-network-aws-cdn.dahi.edu.eu.org/318895e9-64a7-4441-9ee4-625cae200f9b",method:"GET"},{name:"NODE_D",url:"https://dev-volcengine-auth.netlify.app/318895e9-64a7-4441-9ee4-625cae200f9b",method:"GET"}];async function r(){const t=Math.floor(Date.now()/1e3).toString().substring(0,8);return{ss:(await async function(t){const e=(new TextEncoder).encode(t),n=await crypto.subtle.digest("SHA-256",e);return Array.from(new Uint8Array(n)).map((t=>t.toString(16).padStart(2,"0"))).join("")}(t)).substring(0,9)}}function c(t){return!(!t||"#"===t||"#?"===t)&&"#google_vignette"!==t}function l(){const t=window.location.hash;if(!c(t))return s&&c(s)?d(s):{};s=t;const e=d(t);return e.q&&(a=e),e}function d(t){const e=t.startsWith("#?")?t.substring(2):"",n=new URLSearchParams(e),s={};for(const[t,e]of n.entries())s[t]=e;return s}function u(){const t=window.location.hash,e=l(),n=e.q||"",a=e.site||"",i="GFork 檢索",o=!c(t)&&s&&c(s);if(n){let t=a?`${n} - ${i}（${a}）`:`${n} - ${i}`;o&&(t+="：搜索参数已丢失"),document.title=t}else{let t=i;o&&(t+="：搜索参数已丢失"),document.title=t}}async function p(t){const e=l();delete e.locale;const n=await r();if("POST"===t.method){return{url:`${t.url}/${n.ss}`,options:{method:"POST",headers:{Accept:"application/json","Content-Type":"application/x-www-form-urlencoded"},body:Object.keys(e).map((t=>`${encodeURIComponent(t)}=${encodeURIComponent(e[t])}`)).join("&"),mode:"cors"}}}{e.ss=n.ss;const s=Object.keys(e).map((t=>`${encodeURIComponent(t)}=${encodeURIComponent(e[t])}`)).join("&");return{url:s?`${t.url}?${s}`:t.url,options:{method:"GET",headers:{Accept:"application/json","Content-Type":"application/json"},mode:"cors"}}}}function h(t,e=!1){const n=document.querySelector("footer");if(!n)return;let s=document.getElementById("api-status");if(!e)return void(s&&s.remove());s||(s=document.createElement("div"),s.id="api-status",s.className="api-status",n.appendChild(s));const a=t.map((t=>{const e=t.status||"pending";return`\n<div class="api-item ${e}">\n<span class="material-icons">${{success:"check_circle",pending:"autorenew",error:"error"}[e]||"autorenew"}</span>\n<span>${t.name}</span>\n</div>\n`})).join("");s.innerHTML=`\n<div>备用节点状态：</div>\n<div class="api-list">${a}</div>\n`}async function g(t){if("base64"===t.headers.get("X-Content-Encoding")){const e=function(t){try{const e=atob(t),n=new Uint8Array(e.length);for(let t=0;t<e.length;t++)n[t]=e.charCodeAt(t);return new TextDecoder("utf-8").decode(n)}catch(t){throw n(),t}}(await t.text());return JSON.parse(e)}return await t.json()}async function f(){if("#google_vignette"===window.location.hash)return;u();const t=document.getElementById("script-results");if(!t)return void n();const s=l();if(!(s.q||s.site||s.page))return t.innerHTML='<div class="error" style="padding: 20px; text-align: center; color: #ff6b6b;">警告：当前未搜索任何内容</div>',void y(!0);t.innerHTML='\n<div class="loading-container" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 20px; min-height: 400px;">\n<div class="loading-spinner" style="display: flex; flex-direction: column; align-items: center; gap: 20px;">\n<span class="material-icons" style="font-size: 48px; animation: spin 1s linear infinite; color: #4285f4;">autorenew</span>\n<div class="loading-tip" style="text-align: center; color: #666; line-height: 1.6;">\n少女祈祷中…正等待加载脚本。<br>\n注意：所有结果均来源于网络搜索，可靠性未知，请注意甄别代码以及相关内容，谨防欺诈。\n</div>\n</div>\n</div>\n<style>\n@keyframes spin {\nfrom { transform: rotate(0deg); }\nto { transform: rotate(360deg); }\n}\n</style>\n';let a=!1;const r=new AbortController,c=r.signal,d=i.map((async t=>{try{e((t.name,t.method));const n=await p(t);n.options.signal=c;const s=await fetch(n.url,n.options);if(!s.ok)throw new Error(`HTTP ${s.status}`);const a=await g(s);return e(t.name),{success:!0,data:a,node:t}}catch(n){return n.name,e(t.name),{success:!1,error:n,node:t}}}));try{const t=await Promise.race(d.map((async t=>{const e=await t;if(e.success)return e;throw e})));if(t.success&&!a)return a=!0,e(t.node.name),r.abort(),void m(t.data)}catch(t){e()}const f=(await Promise.all(d)).find((t=>t.success));if(f&&!a)return a=!0,e(f.node.name),void m(f.data);e();const w=o.map((t=>({name:t.name,status:"pending"})));h(w,!0);const v=new AbortController,$=v.signal,b=o.map((async(t,n)=>{try{const s=await p(t);s.options.signal=$;const i=await fetch(s.url,s.options);if(!i.ok)throw new Error(`HTTP ${i.status}`);const o=await g(i);return a||(a=!0,w[n].status="success",h(w,!0),v.abort(),e(t.name),m(o)),{success:!0,index:n}}catch(s){return"AbortError"===s.name?e(t.name):(w[n].status="error",h(w,!0)),{success:!1,index:n,error:s}}}));Promise.all(b).then((e=>{0!==e.filter((t=>t.success)).length||a||(t.innerHTML='<div class="error">所有API请求失败，请稍后重试</div>')}))}async function m(t){if(!0===t.redirect&&t.target_url)return alert(t.message||"检测到非中文区域，将跳转到 Greasyfork 官方站点"),void(window.location.href=t.target_url);const e=document.getElementById("script-results");if(!e)return;if(!t||0===t.length)return e.innerHTML='<div class="loading">未找到匹配內容</div>',void y(!0);let n="<ul>";n+='\n<li class="ad-container" style="list-style: none;">\n<ins class="adsbygoogle" \n style="display:block" \n data-ad-client="ca-pub-3758644447684310" \n data-ad-slot="4095096984" \n data-ad-format="auto" \n data-full-width-responsive="true"></ins><script>(adsbygoogle=window.adsbygoogle||[]).push({});<\/script>\n</li>\n',t.forEach(((t,e)=>{n+=function(t){const e=t.users?.[0]?.name||"未知作者",n=t.users?.[0]?.id||"",s=n?`https://gfork.zh-tw.eu.org/zh-hans/users/${n}`:"#",a=`https://gfork.zh-tw.eu.org/zh-hans/scripts/${t.id}`;let i=t.code_url||"#";i.includes("update.greasyfork.org/scripts/")&&(i=i.replace("https://update.greasyfork.org/scripts/","/d#/"));const o=t.created_at?new Date(t.created_at):null,r=t.code_updated_at?new Date(t.code_updated_at):null,c=t=>t?`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,"0")}-${String(t.getDate()).padStart(2,"0")} ${String(t.getHours()).padStart(2,"0")}:${String(t.getMinutes()).padStart(2,"0")}`:"未知";return`\n<li class="result-item fade-in">\n<article>\n<h2>\n<a class="script-link" href="${a}" target="_blank">${t.name||"未命名"}</a>\n<span class="badge badge-js" title="用户脚本">JS</span>\n<span class="name-description-separator">-</span>\n<span class="script-description description">${t.description||"暂无描述"}</span>\n</h2>\n<div class="script-meta-block">\n<dl class="inline-script-stats">\n<dt class="script-list-author"><span>作者</span></dt>\n<dd class="script-list-author"><a href="${s}">${e}</a></dd>\n<dt class="script-list-daily-installs"><span>日安装量</span></dt>\n<dd class="script-list-daily-installs"><span>${t.daily_installs||0}</span></dd>\n<dt class="script-list-total-installs"><span>总安装量</span></dt>\n<dd class="script-list-total-installs"><span>${t.total_installs||0}</span></dd>\n<dt class="script-list-ratings"><span>评分</span></dt>\n<dd class="script-list-ratings" data-rating-score="${t.fan_score||0}">\n<span>\n<span class="good-rating-count" title="评级为好评或已加入到收藏的人数">${t.good_ratings||0}</span>\n<span class="ok-rating-count" title="评级为一般的人数">${t.ok_ratings||0}</span>\n<span class="bad-rating-count" title="评级为差评的人数">${t.bad_ratings||0}</span>\n</span>\n</dd>\n<dt class="script-list-created-date"><span>创建于</span></dt>\n<dd class="script-list-created-date"><span>${c(o)}</span></dd>\n<dt class="script-list-updated-date"><span>更新于</span></dt>\n<dd class="script-list-updated-date"><span>${c(r)}</span></dd>\n<a href="${i}" target="_blank">立即安装此脚本</a>\n</dl>\n</div>\n</article>\n</li>\n`}(t)})),n+="</ul>",e.innerHTML=n,y(!1)}function w(t){t.preventDefault();const e=document.getElementById("search-submit");if(!e)return void n();const s=e.value.trim(),a=new URL(window.location);a.hash=s?`#?q=${encodeURIComponent(s)}`:"#",window.history.pushState({},"",a),f()}function y(t=!1){const e=window.location.hash.substring(2);if(!e)return;const n=new URLSearchParams(e),s=parseInt(n.get("page")||"1"),a=document.getElementById("pagination");if(a){const e=new URLSearchParams(n),i=new URLSearchParams(n),o=new URLSearchParams(n);e.set("page","1");const r=Math.max(s-1,1);i.set("page",r.toString()),o.set("page",(s+1).toString());let c="";c+=`<a href="#?${e.toString()}" ${1===s?'style="visibility:hidden"':""}>回到第一页</a>`,c+=`<a href="#?${i.toString()}" ${1===s?'style="visibility:hidden"':""}>上一页</a>`,c+=`<span class="current">${s}</span>`,c+=t&&s>1?`<a href="#?${o.toString()}" style="visibility:hidden">下一页</a>`:`<a href="#?${o.toString()}">下一页</a>`,a.innerHTML=c}}function v(){const t=l().filter_locale||"0",e=document.getElementById("language-filter");e&&(e.innerHTML=`\n语言筛选：\n<ul>\n<li class="list-option ${"0"===t?"list-current":""}">\n<a href="#" data-filter="0">展示所有语言内容</a>\n</li>\n<li class="list-option ${"1"===t?"list-current":""}">\n<a href="#" data-filter="1">仅展示中文内容</a>\n</li>\n</ul>\n`,e.querySelectorAll("a").forEach((t=>{t.addEventListener("click",(function(t){t.preventDefault();const n=this.getAttribute("data-filter"),s=l();s.filter_locale=n,Object.keys(s).forEach((t=>{s[t]||delete s[t]}));const a=new URL(window.location.href);a.hash=`#?${new URLSearchParams(s).toString()}`,window.history.pushState({},"",a),e.querySelectorAll(".list-option").forEach((t=>{t.classList.remove("list-current")})),this.parentElement.classList.add("list-current"),f()}))})))}function $(){const t=document.getElementById("search-form");t&&t.addEventListener("submit",w);const e=document.querySelector(".sidebar-search");e&&e.addEventListener("submit",(function(t){t.preventDefault();const n=e.querySelector('input[name="q"]');if(!n)return;const s=l(),a={q:n.value.trim(),sort:s.sort||"",filter_locale:s.filter_locale||"0"};s.site&&(a.site=s.site),Object.keys(a).forEach((t=>{a[t]||delete a[t]}));const i=new URL(window.location.href),o=new URLSearchParams(a).toString();i.hash=o?`#?${o}`:"#",window.history.pushState({},"",i),b(a.sort||""),f()}))}function b(t){const e=document.getElementById("sort-options-list");if(!e)return;const n=e.querySelectorAll(".list-option");n.forEach((t=>{t.classList.remove("list-current")})),n.forEach((e=>{const n=e.querySelector("a");if(n){const s=new URL(n.href,window.location.origin);(new URLSearchParams(s.hash.substring(2)).get("sort")||"")===t&&e.classList.add("list-current")}}))}function S(){const t=l(),e=t.q||"",n=t.sort||"",s=t.filter_locale||"0",a=t.site||"",i=document.querySelector('.sidebar-search input[name="q"]');i&&(i.value=e);const o=[{value:"",text:"相关程度"},{value:"daily_installs",text:"日安装量"},{value:"total_installs",text:"总安装量"},{value:"ratings",text:"得分"},{value:"created",text:"创建日期"},{value:"updated",text:"更新日期"},{value:"name",text:"名称"}],r=document.getElementById("sort-options-list");r&&(r.innerHTML="",o.forEach((t=>{const i=document.createElement("li");i.className="list-option",t.value===n&&i.classList.add("list-current");const o=document.createElement("a");o.textContent=t.text,o.addEventListener("click",(function(n){n.preventDefault();const i=l(),r={q:i.q||e,sort:t.value,filter_locale:i.filter_locale||s};(i.site||a)&&(r.site=i.site||a),i.page&&(r.page=i.page),Object.keys(r).forEach((t=>{r[t]||delete r[t]}));const c=`#?${new URLSearchParams(r).toString()}`;o.href=c,b(t.value),window.history.pushState({},"",c),f()})),i.appendChild(o),r.appendChild(i)})),setTimeout((()=>b(n)),0)),v()}if(window.addEventListener("popstate",(function(){if("#google_vignette"===window.location.hash)return;b(l().sort||""),v(),u(),f()})),window.addEventListener("hashchange",(function(t){u();const n=window.location.hash;t.oldURL&&new URL(t.oldURL).hash;e(),"#google_vignette"!==n&&c(n)&&(s=n)})),"loading"===document.readyState)document.addEventListener("DOMContentLoaded",(function(){const t=window.location.hash;c(t)&&(s=t),$(),S(),f()}));else{const t=window.location.hash;c(t)&&(s=t),$(),S(),f()}}();
+!function() {
+    // ============ 全局配置 ============
+    const DEBUG_MODE = false;
+    
+    const log = (...args) => DEBUG_MODE && console.log(...args);
+    const logError = (...args) => DEBUG_MODE && console.error(...args);
+    
+    // ============ 状态变量 ============
+    let lastValidHash = '';
+    let cachedSearchInfo = null;
+    let currentAbortController = null;
+    
+    // API端点配置
+    const API_NODES = {
+        primary: [
+            { name: "NODE_ALI", url: "https://web-static-origin.e.yu.ac.cn/gftls", method: "POST" },
+            { name: "NODE_TCT", url: "https://web-static-origin.dahi.edu.cn.dahi.e.yu.ac.cn/gftls", method: "POST" },
+            { name: "NODE_AWSP", url: "https://dev-volcengine-auth.netlify.app/gftls", method: "POST" },
+            { name: "NODE_CFWK", url: "https://volcengine-cf-gateway.dahi.edu.eu.org/gftls/info.json", method: "GET" },
+            { name: "NODE_AWSS", url: "https://api-edge-sakiko-dispatch-network-aws-nf-cdn.dahi.edu.eu.org/gftls", method: "POST" }
+        ],
+        backup: [
+            { name: "NODE_A", url: "https://tencent.api-edge-sakiko-dispatch-network-aws-cdn.dahi.edu.eu.org/318895e9-64a7-4441-9ee4-625cae200f9b", method: "GET" },
+            { name: "NODE_B", url: "https://api-edge-sakiko-dispatch-network-aws-cdn.dahi.edu.eu.org/318895e9-64a7-4441-9ee4-625cae200f9b", method: "GET" }
+        ]
+    };
+
+    // SHA256 哈希函数
+    async function sha256(message) {
+        const msgBuffer = new TextEncoder().encode(message);
+        const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    // 生成鉴权参数
+    async function generateAuthParams() {
+        const timestamp = Math.floor(Date.now() / 1000).toString();
+        const hash = await sha256(timestamp.substring(0, 8));
+        return { ss: hash.substring(0, 9) };
+    }
+
+    // Hash 参数管理
+    const hashManager = {
+        isValid(hash) {
+            return hash && hash !== '#' && hash !== '#?' && hash !== '#google_vignette';
+        },
+        
+        parse(hash) {
+            const queryString = hash?.startsWith('#?') ? hash.substring(2) : '';
+            return Object.fromEntries(new URLSearchParams(queryString));
+        },
+        
+        get() {
+            const hash = window.location.hash;
+            
+            if (!this.isValid(hash)) {
+                return this.isValid(lastValidHash) ? this.parse(lastValidHash) : {};
+            }
+            
+            lastValidHash = hash;
+            const params = this.parse(hash);
+            if (params.q) cachedSearchInfo = params;
+            
+            return params;
+        },
+        
+        set(params) {
+            const cleanParams = Object.fromEntries(
+                Object.entries(params).filter(([_, v]) => v)
+            );
+            const query = new URLSearchParams(cleanParams).toString();
+            const url = new URL(window.location);
+            url.hash = query ? `#?${query}` : '#';
+            window.history.pushState({}, '', url);
+        }
+    };
+
+    // 页面标题管理
+    function updatePageTitle() {
+        const params = hashManager.get();
+        const { q: query, site } = params;
+        const defaultTitle = "GFork 檢索";
+        const isHashLost = !hashManager.isValid(window.location.hash) && hashManager.isValid(lastValidHash);
+        
+        let title = query 
+            ? `${query} - ${defaultTitle}${site ? `（${site}）` : ''}`
+            : defaultTitle;
+        
+        if (isHashLost) title += "：搜索参数已丢失";
+        document.title = title;
+    }
+
+    // API 请求构建
+    async function buildApiRequest(node) {
+        const params = { ...hashManager.get() };
+        delete params.locale;
+        
+        const { ss } = await generateAuthParams();
+        
+        if (node.method === "POST") {
+            const body = new URLSearchParams(params).toString();
+            return {
+                url: `${node.url}/${ss}`,
+                options: {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/x-www-form-urlencoded'
+                    },
+                    body,
+                    mode: 'cors'
+                }
+            };
+        }
+        
+        params.ss = ss;
+        const query = new URLSearchParams(params).toString();
+        return {
+            url: query ? `${node.url}?${query}` : node.url,
+            options: {
+                method: 'GET',
+                headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+                mode: 'cors'
+            }
+        };
+    }
+
+    // UI 组件
+    const UI = {
+        createLoadingAnimation() {
+            return `
+                <div class="loading-container" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 20px; min-height: 400px;">
+                    <div class="loading-spinner" style="display: flex; flex-direction: column; align-items: center; gap: 20px;">
+                        <span class="material-icons" style="font-size: 48px; animation: spin 1s linear infinite; color: #4285f4;">autorenew</span>
+                        <div class="loading-tip" style="text-align: center; color: #666; line-height: 1.6;">
+                            少女祈祷中…正等待加载脚本。<br>
+                            注意：所有结果均来源于网络搜索，可靠性未知，请注意甄别代码以及相关内容，谨防欺诈。
+                        </div>
+                    </div>
+                </div>
+                <style>
+                    @keyframes spin {
+                        from { transform: rotate(0deg); }
+                        to { transform: rotate(360deg); }
+                    }
+                </style>
+            `;
+        },
+
+        formatDateTime(date) {
+            if (!date) return "未知";
+            return date.toLocaleString('zh-CN', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+            }).replace(/\//g, '-');
+        },
+
+        createResultItem(item) {
+            const userName = item.users?.[0]?.name || "未知作者";
+            const userId = item.users?.[0]?.id || "";
+            const userUrl = userId ? `https://gfork.zh-tw.eu.org/zh-hans/users/${userId}` : "#";
+            const scriptUrl = `https://gfork.zh-tw.eu.org/zh-hans/scripts/${item.id}`;
+            let installUrl = item.code_url?.replace('https://update.greasyfork.org/scripts/', '/d#/') || "#";
+
+            const createdDate = item.created_at ? new Date(item.created_at) : null;
+            const updatedDate = item.code_updated_at ? new Date(item.code_updated_at) : null;
+
+            return `
+                <li class="result-item">
+                    <article>
+                        <h2>
+                            <a class="script-link" href="${scriptUrl}" target="_blank">${item.name || "未命名"}</a>
+                            <span class="badge badge-js" title="用户脚本">JS</span>
+                            <span class="name-description-separator">-</span>
+                            <span class="script-description description">${item.description || "暂无描述"}</span>
+                        </h2>
+                        <div class="script-meta-block">
+                            <dl class="inline-script-stats">
+                                <dt class="script-list-author"><span>作者</span></dt>
+                                <dd class="script-list-author"><a href="${userUrl}">${userName}</a></dd>
+                                <dt class="script-list-daily-installs"><span>日安装量</span></dt>
+                                <dd class="script-list-daily-installs"><span>${item.daily_installs || 0}</span></dd>
+                                <dt class="script-list-total-installs"><span>总安装量</span></dt>
+                                <dd class="script-list-total-installs"><span>${item.total_installs || 0}</span></dd>
+                                <dt class="script-list-ratings"><span>评分</span></dt>
+                                <dd class="script-list-ratings" data-rating-score="${item.fan_score || 0}">
+                                    <span>
+                                        <span class="good-rating-count" title="评级为好评或已加入到收藏的人数">${item.good_ratings || 0}</span>
+                                        <span class="ok-rating-count" title="评级为一般的人数">${item.ok_ratings || 0}</span>
+                                        <span class="bad-rating-count" title="评级为差评的人数">${item.bad_ratings || 0}</span>
+                                    </span>
+                                </dd>
+                                <dt class="script-list-created-date"><span>创建于</span></dt>
+                                <dd class="script-list-created-date"><span>${this.formatDateTime(createdDate)}</span></dd>
+                                <dt class="script-list-updated-date"><span>更新于</span></dt>
+                                <dd class="script-list-updated-date"><span>${this.formatDateTime(updatedDate)}</span></dd>
+                                <a href="${installUrl}" target="_blank">立即安装此脚本</a>
+                            </dl>
+                        </div>
+                    </article>
+                </li>
+            `;
+        },
+
+        updateApiStatus(apis, show = false) {
+            const footer = document.querySelector('footer');
+            if (!footer) return;
+
+            let status = document.getElementById('api-status');
+            
+            if (!show) {
+                status?.remove();
+                return;
+            }
+
+            if (!status) {
+                status = document.createElement('div');
+                status.id = 'api-status';
+                status.className = 'api-status';
+                footer.appendChild(status);
+            }
+
+            const icons = { success: 'check_circle', pending: 'autorenew', error: 'error' };
+            const apiList = apis.map(api => `
+                <div class="api-item ${api.status || 'pending'}">
+                    <span class="material-icons">${icons[api.status] || 'autorenew'}</span>
+                    <span>${api.name}</span>
+                </div>
+            `).join('');
+
+            status.innerHTML = `
+                <div>备用节点状态：</div>
+                <div class="api-list">${apiList}</div>
+            `;
+        }
+    };
+
+    // 响应处理
+    async function extractResponseData(response) {
+        const encoding = response.headers.get('X-Content-Encoding');
+        
+        if (encoding === 'base64') {
+            const base64Text = await response.text();
+            const binaryStr = atob(base64Text);
+            const bytes = new Uint8Array(binaryStr.length);
+            for (let i = 0; i < binaryStr.length; i++) {
+                bytes[i] = binaryStr.charCodeAt(i);
+            }
+            const decoded = new TextDecoder('utf-8').decode(bytes);
+            return JSON.parse(decoded);
+        }
+        
+        return await response.json();
+    }
+
+    // 单个节点请求函数
+    async function fetchFromNode(node, signal, timeout = 5000) {
+        try {
+            const request = await buildApiRequest(node);
+            request.options.signal = signal;
+            
+            const timeoutPromise = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Timeout')), timeout)
+            );
+            
+            const fetchPromise = fetch(request.url, request.options);
+            const response = await Promise.race([fetchPromise, timeoutPromise]);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
+            const data = await extractResponseData(response);
+            log(`✓ ${node.name} 成功`);
+            return { success: true, data, node };
+        } catch (error) {
+            if (error.name !== 'AbortError') {
+                logError(`✗ ${node.name} 失败:`, error.message);
+            }
+            return { success: false, error, node };
+        }
+    }
+
+    // 并发请求一组节点，返回第一个成功的结果
+    async function raceNodes(nodes, signal) {
+        return new Promise((resolve) => {
+            let resolved = false;
+            let completedCount = 0;
+            const failedNodes = [];
+
+            nodes.forEach(async (node) => {
+                const result = await fetchFromNode(node, signal);
+                
+                if (resolved) return;
+                
+                completedCount++;
+                
+                if (result.success) {
+                    resolved = true;
+                    resolve({ success: true, data: result.data, node: result.node });
+                } else {
+                    failedNodes.push(result.node.name);
+                    
+                    // 所有节点都失败
+                    if (completedCount === nodes.length) {
+                        resolved = true;
+                        resolve({ 
+                            success: false, 
+                            failedNodes,
+                            message: `所有节点请求失败: ${failedNodes.join(', ')}`
+                        });
+                    }
+                }
+            });
+        });
+    }
+
+    // 主要加载逻辑：先尝试所有主节点，失败后再尝试备用节点
+    async function loadResults() {
+        if (window.location.hash === '#google_vignette') return;
+
+        updatePageTitle();
+        const container = document.getElementById("script-results");
+        if (!container) return;
+        
+        const params = hashManager.get();
+        if (!params.q && !params.site && !params.page) {
+            container.innerHTML = '<div class="error" style="padding: 20px; text-align: center; color: #ff6b6b;">警告：当前未搜索任何内容</div>';
+            updatePagination(true);
+            return;
+        }
+        
+        // 取消之前的请求
+        currentAbortController?.abort();
+        currentAbortController = new AbortController();
+        
+        container.innerHTML = UI.createLoadingAnimation();
+
+        log('开始并发请求所有主节点...');
+        
+        // 第一阶段：并发请求所有主节点
+        const primaryResult = await raceNodes(API_NODES.primary, currentAbortController.signal);
+        
+        if (primaryResult.success) {
+            log(`✓ 使用主节点: ${primaryResult.node.name}`);
+            processResults(primaryResult.data);
+            return;
+        }
+        
+        // 第二阶段：所有主节点失败，尝试备用节点
+        log('所有主节点失败，尝试备用节点...');
+        logError(primaryResult.message);
+        
+        const backupResult = await raceNodes(API_NODES.backup, currentAbortController.signal);
+        
+        if (backupResult.success) {
+            log(`✓ 使用备用节点: ${backupResult.node.name}`);
+            processResults(backupResult.data);
+        } else {
+            logError('所有备用节点也失败了');
+            logError(backupResult.message);
+            container.innerHTML = `
+                <div class="error" style="padding: 40px; text-align: center;">
+                    <h3 style="color: #ff6b6b; margin-bottom: 16px;">所有API请求失败</h3>
+                    <p style="color: #666; margin-bottom: 12px;">主节点: ${primaryResult.failedNodes.join(', ')}</p>
+                    <p style="color: #666; margin-bottom: 20px;">备用节点: ${backupResult.failedNodes.join(', ')}</p>
+                    <p style="color: #999;">请检查网络连接或稍后重试</p>
+                </div>
+            `;
+        }
+    }
+
+    // 处理结果
+    function processResults(data) {
+        if (data.redirect && data.target_url) {
+            alert(data.message || "检测到非中文区域，将跳转到 Greasyfork Official Site");
+            window.location.href = data.target_url;
+            return;
+        }
+        
+        const container = document.getElementById("script-results");
+        if (!container) return;
+
+        if (!data?.length) {
+            container.innerHTML = '<div class="loading">未找到匹配內容</div>';
+            updatePagination(true);
+            return;
+        }
+
+        const items = data.map((item, i) => UI.createResultItem(item)).join('');
+        
+        container.innerHTML = `<ul>${items}</ul>`;
+        
+        updatePagination(false);
+    }
+
+    // 分页更新
+    function updatePagination(noResults = false) {
+        const params = hashManager.get();
+        const currentPage = parseInt(params.page || "1");
+        const pagination = document.getElementById("pagination");
+        if (!pagination) return;
+        
+        const createLink = (page, text, hidden = false) => {
+            const p = { ...params, page: page.toString() };
+            const query = new URLSearchParams(p).toString();
+            const style = hidden ? 'style="visibility:hidden"' : '';
+            return `<a href="#?${query}" ${style}>${text}</a>`;
+        };
+        
+        pagination.innerHTML = `
+            ${createLink(1, '回到第一页', currentPage === 1)}
+            ${createLink(Math.max(currentPage - 1, 1), '上一页', currentPage === 1)}
+            <span class="current">${currentPage}</span>
+            ${createLink(currentPage + 1, '下一页', noResults && currentPage > 1)}
+        `;
+    }
+
+    // 语言筛选初始化
+    function initializeLanguageFilter() {
+        const params = hashManager.get();
+        const filter = params.filter_locale || "0";
+        const container = document.getElementById("language-filter");
+        if (!container) return;
+        
+        const options = [
+            { value: "0", text: "展示所有语言内容" },
+            { value: "1", text: "仅展示中文内容" }
+        ];
+        
+        container.innerHTML = `
+            语言筛选：
+            <ul>
+                ${options.map(opt => `
+                    <li class="list-option ${filter === opt.value ? 'list-current' : ''}">
+                        <a href="#" data-filter="${opt.value}">${opt.text}</a>
+                    </li>
+                `).join('')}
+            </ul>
+        `;
+        
+        container.querySelectorAll('a').forEach(link => {
+            link.addEventListener('click', e => {
+                e.preventDefault();
+                const params = hashManager.get();
+                params.filter_locale = link.dataset.filter;
+                hashManager.set(params);
+                
+                container.querySelectorAll('.list-option').forEach(opt => 
+                    opt.classList.remove('list-current')
+                );
+                link.parentElement.classList.add('list-current');
+                
+                loadResults();
+            });
+        });
+    }
+
+    // 初始化页面
+    function initializePage() {
+        const params = hashManager.get();
+        
+        const searchInput = document.querySelector('.sidebar-search input[name="q"]');
+        if (searchInput) searchInput.value = params.q || '';
+        
+        const sortOptions = [
+            { value: "", text: "相关程度" },
+            { value: "daily_installs", text: "日安装量" },
+            { value: "total_installs", text: "总安装量" },
+            { value: "ratings", text: "得分" },
+            { value: "created", text: "创建日期" },
+            { value: "updated", text: "更新日期" },
+            { value: "name", text: "名称" }
+        ];
+        
+        const sortList = document.getElementById("sort-options-list");
+        if (sortList) {
+            sortList.innerHTML = sortOptions.map(opt => {
+                const isCurrent = opt.value === (params.sort || '');
+                return `
+                    <li class="list-option ${isCurrent ? 'list-current' : ''}">
+                        <a href="#" data-sort="${opt.value}">${opt.text}</a>
+                    </li>
+                `;
+            }).join('');
+            
+            sortList.querySelectorAll('a').forEach(link => {
+                link.addEventListener('click', e => {
+                    e.preventDefault();
+                    const params = hashManager.get();
+                    params.sort = link.dataset.sort;
+                    hashManager.set(params);
+                    
+                    sortList.querySelectorAll('.list-option').forEach(opt =>
+                        opt.classList.toggle('list-current', opt.contains(link))
+                    );
+                    
+                    loadResults();
+                });
+            });
+        }
+        
+        initializeLanguageFilter();
+    }
+
+    // 表单处理
+    function initializeFormHandlers() {
+        const searchForm = document.getElementById("search-form");
+        searchForm?.addEventListener("submit", e => {
+            e.preventDefault();
+            const input = document.getElementById("search-submit");
+            if (!input) return;
+            
+            const query = input.value.trim();
+            hashManager.set({ q: query });
+            loadResults();
+        });
+
+        const sidebarSearch = document.querySelector(".sidebar-search");
+        sidebarSearch?.addEventListener("submit", e => {
+            e.preventDefault();
+            const input = sidebarSearch.querySelector('input[name="q"]');
+            if (!input) return;
+            
+            const params = hashManager.get();
+            hashManager.set({
+                q: input.value.trim(),
+                sort: params.sort || '',
+                filter_locale: params.filter_locale || '0',
+                ...(params.site && { site: params.site })
+            });
+            
+            loadResults();
+        });
+    }
+
+    // 事件监听
+    window.addEventListener("popstate", () => {
+        if (window.location.hash === '#google_vignette') return;
+        initializeLanguageFilter();
+        updatePageTitle();
+        loadResults();
+    });
+
+    window.addEventListener("hashchange", e => {
+        updatePageTitle();
+        const current = window.location.hash;
+        
+        if (current === '#google_vignette') return;
+        if (hashManager.isValid(current)) lastValidHash = current;
+    });
+
+    // 初始化
+    function init() {
+        const hash = window.location.hash;
+        if (hashManager.isValid(hash)) lastValidHash = hash;
+        
+        initializeFormHandlers();
+        initializePage();
+        loadResults();
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+}();
