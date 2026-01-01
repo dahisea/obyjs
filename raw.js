@@ -1,573 +1,143 @@
-!function() {
-    // ============ 全局配置 ============
-    const DEBUG_MODE = false;
-    
-    const log = (...args) => DEBUG_MODE && console.log(...args);
-    const logError = (...args) => DEBUG_MODE && console.error(...args);
-    
-    // ============ 状态变量 ============
-    let lastValidHash = '';
-    let cachedSearchInfo = null;
-    let currentAbortController = null;
-    
-    // API端点配置
-    const API_NODES = {
-        primary: [
-            { name: "NODE_ALI", url: "https://web-static-origin.e.yu.ac.cn/gftls", method: "POST" },
-            { name: "NODE_TCT", url: "https://web-static-origin.dahi.edu.cn.dahi.e.yu.ac.cn/gftls", method: "POST" },
-            { name: "NODE_AWSP", url: "https://dev-volcengine-auth.netlify.app/gftls", method: "POST" },
-            { name: "NODE_CFWK", url: "https://volcengine-cf-gateway.dahi.edu.eu.org/gftls/info.json", method: "GET" },
-            { name: "NODE_AWSS", url: "https://api-edge-sakiko-dispatch-network-aws-nf-cdn.dahi.edu.eu.org/gftls", method: "POST" }
-        ],
-        backup: [
-            { name: "NODE_A", url: "https://tencent.api-edge-sakiko-dispatch-network-aws-cdn.dahi.edu.eu.org/318895e9-64a7-4441-9ee4-625cae200f9b", method: "GET" },
-            { name: "NODE_B", url: "https://api-edge-sakiko-dispatch-network-aws-cdn.dahi.edu.eu.org/318895e9-64a7-4441-9ee4-625cae200f9b", method: "GET" }
-        ]
-    };
 
-    // SHA256 哈希函数
-    async function sha256(message) {
-        const msgBuffer = new TextEncoder().encode(message);
-        const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-        const hashArray = Array.from(new Uint8Array(hashBuffer));
-        return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-    }
+const D=["https://static-sg-apse1-primary-mirror-aws-s3-cloudfront-public-cdn.dahi.edu.eu.org","https://static-sg-apse1-primary-mirror-aws-s3-cloudfront-public-cdn.dahi.edu.eu.org.cdn.cloudflare.net","https://tencent.api-data-abtest-config.dahi.edu.eu.org","https://api-data-aws-abtest-config.dahi.edu.eu.org","https://abtest-ch-snssdk-os.netlify.app","https://api-data-abtest-config.dahi.edu.eu.org"];
+const CFG={to:2e3,cnt:3,days:3,key:'gfork_fastest_domain',ipto:3e3,cto:2e3,ito:1e3};
+let R=[],IP=null,app=null;
 
-    // 生成鉴权参数
-    async function generateAuthParams() {
-        const timestamp = Math.floor(Date.now() / 1000).toString();
-        const hash = await sha256(timestamp.substring(0, 8));
-        return { ss: hash.substring(0, 9) };
-    }
+const scripts=[
+{id:"12345",name:"網頁廣告攔截助手",author:"AdBlocker",desc:"自動攔截網頁中的煩人廣告，讓瀏覽更清爽。支援主流影片網站、新聞網站等。",cat:"效率工具",dl:125600,rate:4.8,icon:"block"},
+{id:"23456",name:"影片下載器增強版",author:"VideoHelper",desc:"支援下載各大影片網站的內容，一鍵儲存到本地。支援批量下載和自訂畫質。",cat:"下載工具",dl:89300,rate:4.6,icon:"download"},
+{id:"34567",name:"自動填表助手",author:"FormFiller",desc:"智慧識別表單欄位，自動填入常用資訊。支援自訂範本，提高工作效率。",cat:"效率工具",dl:67800,rate:4.5,icon:"edit_note"},
+{id:"45678",name:"網頁翻譯增強",author:"TranslateMax",desc:"即時翻譯網頁內容，支援多種語言。劃詞翻譯、全文翻譯一應俱全。",cat:"學習工具",dl:156200,rate:4.9,icon:"translate"},
+{id:"56789",name:"GitHub增強工具",author:"GitHelper",desc:"為GitHub新增更多實用功能，包括程式碼樹、檔案下載、統計圖表等。",cat:"開發工具",dl:45600,rate:4.7,icon:"code"},
+{id:"67890",name:"購物比價助手",author:"PriceCompare",desc:"自動比較各大電商平台的商品價格，幫你找到最優惠的購買渠道。",cat:"購物優惠",dl:98700,rate:4.6,icon:"shopping_cart"},
+{id:"78901",name:"夜間模式增強",author:"DarkMode",desc:"為任何網站新增舒適的夜間模式，保護眼睛減少疲勞。支援自訂色彩方案。",cat:"美化工具",dl:112400,rate:4.8,icon:"dark_mode"},
+{id:"89012",name:"網盤加速下載",author:"SpeedUp",desc:"突破網盤下載速度限制，支援多執行緒下載。讓下載速度飛起來。",cat:"下載工具",dl:203500,rate:4.9,icon:"speed"}
+];
+let flt='全部',q='';
 
-    // Hash 参数管理
-    const hashManager = {
-        isValid(hash) {
-            return hash && hash !== '#' && hash !== '#?' && hash !== '#google_vignette';
-        },
-        
-        parse(hash) {
-            const queryString = hash?.startsWith('#?') ? hash.substring(2) : '';
-            return Object.fromEntries(new URLSearchParams(queryString));
-        },
-        
-        get() {
-            const hash = window.location.hash;
-            
-            if (!this.isValid(hash)) {
-                return this.isValid(lastValidHash) ? this.parse(lastValidHash) : {};
-            }
-            
-            lastValidHash = hash;
-            const params = this.parse(hash);
-            if (params.q) cachedSearchInfo = params;
-            
-            return params;
-        },
-        
-        set(params) {
-            const cleanParams = Object.fromEntries(
-                Object.entries(params).filter(([_, v]) => v)
-            );
-            const query = new URLSearchParams(cleanParams).toString();
-            const url = new URL(window.location);
-            url.hash = query ? `#?${query}` : '#';
-            window.history.pushState({}, '', url);
-        }
-    };
+const $=(ms)=>new Promise(r=>setTimeout(r,ms));
+const dd=(d)=>d.replace('https://','');
+const fmt=(n)=>n>=1e4?(n/1e4).toFixed(1)+'萬':n.toLocaleString();
 
-    // 页面标题管理
-    function updatePageTitle() {
-        const params = hashManager.get();
-        const { q: query, site } = params;
-        const defaultTitle = "GFork 檢索";
-        const isHashLost = !hashManager.isValid(window.location.hash) && hashManager.isValid(lastValidHash);
-        
-        let title = query 
-            ? `${query} - ${defaultTitle}${site ? `（${site}）` : ''}`
-            : defaultTitle;
-        
-        if (isHashLost) title += "：搜索参数已丢失";
-        document.title = title;
-    }
+async function getIP(){
+try{
+const c=new AbortController(),t=setTimeout(()=>c.abort(),CFG.ipto);
+const r=await fetch('https://www.cloudflare.com/cdn-cgi/trace',{signal:c.signal});
+clearTimeout(t);
+const txt=await r.text();
+for(const l of txt.split('\n'))if(l.startsWith('ip='))IP=l.split('=')[1].trim();
+}catch(e){}
+}
 
-    // API 请求构建
-    async function buildApiRequest(node) {
-        const params = { ...hashManager.get() };
-        delete params.locale;
-        
-        const { ss } = await generateAuthParams();
-        
-        if (node.method === "POST") {
-            const body = new URLSearchParams(params).toString();
-            return {
-                url: `${node.url}/${ss}`,
-                options: {
-                    method: 'POST',
-                    headers: {
-                        'Accept': 'application/json',
-                        'Content-Type': 'application/x-www-form-urlencoded'
-                    },
-                    body,
-                    mode: 'cors'
-                }
-            };
-        }
-        
-        params.ss = ss;
-        const query = new URLSearchParams(params).toString();
-        return {
-            url: query ? `${node.url}?${query}` : node.url,
-            options: {
-                method: 'GET',
-                headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-                mode: 'cors'
-            }
-        };
-    }
+function getPath(h){
+return h&&h.startsWith('#/')?h.substring(2):null;
+}
 
-    // UI 组件
-    const UI = {
-        createLoadingAnimation() {
-            return `
-                <div class="loading-container" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 20px; min-height: 400px;">
-                    <div class="loading-spinner" style="display: flex; flex-direction: column; align-items: center; gap: 20px;">
-                        <span class="material-icons" style="font-size: 48px; animation: spin 1s linear infinite; color: #4285f4;">autorenew</span>
-                        <div class="loading-tip" style="text-align: center; color: #666; line-height: 1.6;">
-                            少女祈祷中…正等待加载脚本。<br>
-                            注意：所有结果均来源于网络搜索，可靠性未知，请注意甄别代码以及相关内容，谨防欺诈。
-                        </div>
-                    </div>
-                </div>
-                <style>
-                    @keyframes spin {
-                        from { transform: rotate(0deg); }
-                        to { transform: rotate(360deg); }
-                    }
-                </style>
-            `;
-        },
+function getCache(){
+if(!IP)return null;
+try{
+const d=JSON.parse(localStorage.getItem(CFG.key)||'null');
+if(!d||d.ip!==IP||Date.now()-d.time>CFG.days*864e5||!D.includes(d.domain)){
+localStorage.removeItem(CFG.key);
+return null;
+}
+return d.domain;
+}catch{return null}
+}
 
-        formatDateTime(date) {
-            if (!date) return "未知";
-            return date.toLocaleString('zh-CN', {
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit',
-                hour: '2-digit',
-                minute: '2-digit',
-                hour12: false
-            }).replace(/\//g, '-');
-        },
+function setCache(d){
+if(!IP)return;
+try{localStorage.setItem(CFG.key,JSON.stringify({ip:IP,domain:d,time:Date.now()}))}catch(e){}
+}
 
-        createResultItem(item) {
-            const userName = item.users?.[0]?.name || "未知作者";
-            const userId = item.users?.[0]?.id || "";
-            const userUrl = userId ? `https://gfork.zh-tw.eu.org/zh-hans/users/${userId}` : "#";
-            const scriptUrl = `https://gfork.zh-tw.eu.org/zh-hans/scripts/${item.id}`;
-            let installUrl = item.code_url?.replace('https://update.greasyfork.org/scripts/', '/d#/') || "#";
+async function testDomain(d){
+return new Promise(r=>{
+const f=document.createElement('iframe');
+f.style.display='none';
+f.sandbox='allow-scripts';
+const t=setTimeout(()=>{c();r(false)},CFG.to);
+function c(){clearTimeout(t);f.parentNode&&document.body.removeChild(f)}
+const h=(e)=>{if(e.data==='gfork_activated'){c();window.removeEventListener('message',h);r(true)}};
+window.addEventListener('message',h);
+f.srcdoc=`<!DOCTYPE html><html><head><script>window.gfork_test_active=false;window.onGforkActivated=function(){window.gfork_test_active=true;parent.postMessage('gfork_activated','*')};const s=document.createElement('script');s.src='${d}/gfork.js';s.onerror=()=>parent.postMessage('gfork_error','*');setTimeout(()=>{if(window.gfork_test_active)parent.postMessage('gfork_activated','*')},100);document.head.appendChild(s);<\/script></head></html>`;
+document.body.appendChild(f);
+});
+}
 
-            const createdDate = item.created_at ? new Date(item.created_at) : null;
-            const updatedDate = item.code_updated_at ? new Date(item.code_updated_at) : null;
+async function testAll(p){
+R=[];
+const sel=[...D].sort(()=>Math.random()-.5).slice(0,CFG.cnt);
+render(`<div class="icon"><span class="material-icons">speed</span></div><h1>測速中</h1><p class="desc">正在測試節點連接速度，請稍候...</p><div class="url">${p}</div><div class="st" id="st"><div class="st-t">測試節點 (${sel.length}個)</div>${sel.map(d=>`<div class="st-i" data-d="${d}"><span class="material-icons">pending</span>${dd(d)}<span class="lat">等待中</span></div>`).join('')}</div><div class="tip">提示：正在隨機測試 ${CFG.cnt} 個節點</div>`);
 
-            return `
-                <li class="result-item">
-                    <article>
-                        <h2>
-                            <a class="script-link" href="${scriptUrl}" target="_blank">${item.name || "未命名"}</a>
-                            <span class="badge badge-js" title="用户脚本">JS</span>
-                            <span class="name-description-separator">-</span>
-                            <span class="script-description description">${item.description || "暂无描述"}</span>
-                        </h2>
-                        <div class="script-meta-block">
-                            <dl class="inline-script-stats">
-                                <dt class="script-list-author"><span>作者</span></dt>
-                                <dd class="script-list-author"><a href="${userUrl}">${userName}</a></dd>
-                                <dt class="script-list-daily-installs"><span>日安装量</span></dt>
-                                <dd class="script-list-daily-installs"><span>${item.daily_installs || 0}</span></dd>
-                                <dt class="script-list-total-installs"><span>总安装量</span></dt>
-                                <dd class="script-list-total-installs"><span>${item.total_installs || 0}</span></dd>
-                                <dt class="script-list-ratings"><span>评分</span></dt>
-                                <dd class="script-list-ratings" data-rating-score="${item.fan_score || 0}">
-                                    <span>
-                                        <span class="good-rating-count" title="评级为好评或已加入到收藏的人数">${item.good_ratings || 0}</span>
-                                        <span class="ok-rating-count" title="评级为一般的人数">${item.ok_ratings || 0}</span>
-                                        <span class="bad-rating-count" title="评级为差评的人数">${item.bad_ratings || 0}</span>
-                                    </span>
-                                </dd>
-                                <dt class="script-list-created-date"><span>创建于</span></dt>
-                                <dd class="script-list-created-date"><span>${this.formatDateTime(createdDate)}</span></dd>
-                                <dt class="script-list-updated-date"><span>更新于</span></dt>
-                                <dd class="script-list-updated-date"><span>${this.formatDateTime(updatedDate)}</span></dd>
-                                <a href="${installUrl}" target="_blank">立即安装此脚本</a>
-                            </dl>
-                        </div>
-                    </article>
-                </li>
-            `;
-        },
+for(let i=0;i<sel.length;i++){
+const d=sel[i],el=document.querySelector(`[data-d="${d}"]`);
+if(el){el.className='st-i';el.innerHTML=`<span class="material-icons">sync</span>${dd(d)}<span class="lat">測試中...</span>`}
+const t0=Date.now(),ok=await testDomain(d),lat=Date.now()-t0;
+if(ok){
+R.push({d,lat});
+if(el){el.className='st-i ok';el.innerHTML=`<span class="material-icons">check_circle</span>${dd(d)}<span class="lat">${lat}ms</span>`}
+}else if(el){el.className='st-i fail';el.innerHTML=`<span class="material-icons">cancel</span>${dd(d)}<span class="lat">超時</span>`}
+if(i<sel.length-1)await $(300);
+}
 
-        updateApiStatus(apis, show = false) {
-            const footer = document.querySelector('footer');
-            if (!footer) return;
+if(R.length>0){
+R.sort((a,b)=>a.lat-b.lat);
+const fast=R[0];
+setCache(fast.d);
+await $(500);
+const url=`${fast.d}/scripts/${p}`;
+render(`<div class="icon ok"><span class="material-icons">check_circle</span></div><h1>驗證成功</h1><p class="desc">已選擇最快節點，即將自動跳轉</p><div class="badge"><span class="material-icons">speed</span>最低延遲 ${fast.lat}ms</div><div class="url">${url}</div><div class="st"><div class="st-t">測速結果</div>${R.map((r,i)=>`<div class="st-i ok"><span class="material-icons">${i===0?'emoji_events':'check_circle'}</span>${dd(r.d)}<span class="lat">${r.lat}ms</span></div>`).join('')}</div><a href="${url}" class="btn"><span class="material-icons">open_in_new</span>立即前往</a>`);
+setTimeout(()=>{location.href=url},1e3);
+}else{
+const rd=D[Math.floor(Math.random()*D.length)];
+const url=`${rd}/scripts/${p}`;
+render(`<div class="icon err"><span class="material-icons">warning</span></div><h1>使用備用方案</h1><p class="desc">所有節點檢測超時，已隨機選擇一個節點</p><div class="url">${url}</div><a href="${url}" class="btn"><span class="material-icons">open_in_new</span>手動前往</a><div class="tip">若無法訪問，請重新整理再試</div>`);
+}
+}
 
-            let status = document.getElementById('api-status');
-            
-            if (!show) {
-                status?.remove();
-                return;
-            }
+function render(h){
+if(app)app.innerHTML=h;
+}
 
-            if (!status) {
-                status = document.createElement('div');
-                status.id = 'api-status';
-                status.className = 'api-status';
-                footer.appendChild(status);
-            }
+function showList(){
+const cats=['全部',...new Set(scripts.map(s=>s.cat))];
+render(`<div class="hdr"><h1>使用者腳本中心</h1><p class="sub">發現並安裝實用的使用者腳本</p></div><div class="search"><span class="material-icons">search</span><input type="text" placeholder="搜尋腳本..." oninput="handleSearch(this.value)"></div><div class="tabs" id="tabs">${cats.map(c=>`<div class="tab${c===flt?' on':''}" onclick="handleFilter('${c}')">${c}</div>`).join('')}</div><div class="grid" id="grid">${renderCards()}</div><div class="tip">提示：點擊任意腳本卡片即可查看詳情並安裝</div>`);
+}
 
-            const icons = { success: 'check_circle', pending: 'autorenew', error: 'error' };
-            const apiList = apis.map(api => `
-                <div class="api-item ${api.status || 'pending'}">
-                    <span class="material-icons">${icons[api.status] || 'autorenew'}</span>
-                    <span>${api.name}</span>
-                </div>
-            `).join('');
+function renderCards(){
+let f=scripts;
+if(flt!=='全部')f=f.filter(s=>s.cat===flt);
+if(q){const lq=q.toLowerCase();f=f.filter(s=>s.name.toLowerCase().includes(lq)||s.desc.toLowerCase().includes(lq)||s.author.toLowerCase().includes(lq))}
+if(f.length===0)return`<div class="empty"><span class="material-icons">search_off</span><h3>未找到相關腳本</h3><p>試試其他關鍵詞或分類</p></div>`;
+return f.map(s=>`<a href="#/${s.id}/${encodeURIComponent(s.name)}.user.js" class="card"><div class="card-h"><div class="card-ico"><span class="material-icons">${s.icon}</span></div><div class="card-info"><div class="card-name">${s.name}</div><div class="card-auth"><span class="material-icons">person</span>${s.author}</div></div></div><div class="card-desc">${s.desc}</div><div class="card-meta"><div><span class="material-icons">download</span>${fmt(s.dl)}</div><div><span class="material-icons">star</span>${s.rate}</div><div><span class="material-icons">label</span>${s.cat}</div></div></a>`).join('');
+}
 
-            status.innerHTML = `
-                <div>备用节点状态：</div>
-                <div class="api-list">${apiList}</div>
-            `;
-        }
-    };
+function handleFilter(c){
+flt=c;
+document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.textContent.trim()===c));
+document.getElementById('grid').innerHTML=renderCards();
+}
 
-    // 响应处理
-    async function extractResponseData(response) {
-        const encoding = response.headers.get('X-Content-Encoding');
-        
-        if (encoding === 'base64') {
-            const base64Text = await response.text();
-            const binaryStr = atob(base64Text);
-            const bytes = new Uint8Array(binaryStr.length);
-            for (let i = 0; i < binaryStr.length; i++) {
-                bytes[i] = binaryStr.charCodeAt(i);
-            }
-            const decoded = new TextDecoder('utf-8').decode(bytes);
-            return JSON.parse(decoded);
-        }
-        
-        return await response.json();
-    }
+function handleSearch(v){
+q=v;
+document.getElementById('grid').innerHTML=renderCards();
+}
 
-    // 单个节点请求函数
-    async function fetchFromNode(node, signal, timeout = 5000) {
-        try {
-            const request = await buildApiRequest(node);
-            request.options.signal = signal;
-            
-            const timeoutPromise = new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('Timeout')), timeout)
-            );
-            
-            const fetchPromise = fetch(request.url, request.options);
-            const response = await Promise.race([fetchPromise, timeoutPromise]);
-            
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-            
-            const data = await extractResponseData(response);
-            log(`✓ ${node.name} 成功`);
-            return { success: true, data, node };
-        } catch (error) {
-            if (error.name !== 'AbortError') {
-                logError(`✗ ${node.name} 失败:`, error.message);
-            }
-            return { success: false, error, node };
-        }
-    }
-
-    // 并发请求一组节点，返回第一个成功的结果
-    async function raceNodes(nodes, signal) {
-        return new Promise((resolve) => {
-            let resolved = false;
-            let completedCount = 0;
-            const failedNodes = [];
-
-            nodes.forEach(async (node) => {
-                const result = await fetchFromNode(node, signal);
-                
-                if (resolved) return;
-                
-                completedCount++;
-                
-                if (result.success) {
-                    resolved = true;
-                    resolve({ success: true, data: result.data, node: result.node });
-                } else {
-                    failedNodes.push(result.node.name);
-                    
-                    // 所有节点都失败
-                    if (completedCount === nodes.length) {
-                        resolved = true;
-                        resolve({ 
-                            success: false, 
-                            failedNodes,
-                            message: `所有节点请求失败: ${failedNodes.join(', ')}`
-                        });
-                    }
-                }
-            });
-        });
-    }
-
-    // 主要加载逻辑：先尝试所有主节点，失败后再尝试备用节点
-    async function loadResults() {
-        if (window.location.hash === '#google_vignette') return;
-
-        updatePageTitle();
-        const container = document.getElementById("script-results");
-        if (!container) return;
-        
-        const params = hashManager.get();
-        if (!params.q && !params.site && !params.page) {
-            container.innerHTML = '<div class="error" style="padding: 20px; text-align: center; color: #ff6b6b;">警告：当前未搜索任何内容</div>';
-            updatePagination(true);
-            return;
-        }
-        
-        // 取消之前的请求
-        currentAbortController?.abort();
-        currentAbortController = new AbortController();
-        
-        container.innerHTML = UI.createLoadingAnimation();
-
-        log('开始并发请求所有主节点...');
-        
-        // 第一阶段：并发请求所有主节点
-        const primaryResult = await raceNodes(API_NODES.primary, currentAbortController.signal);
-        
-        if (primaryResult.success) {
-            log(`✓ 使用主节点: ${primaryResult.node.name}`);
-            processResults(primaryResult.data);
-            return;
-        }
-        
-        // 第二阶段：所有主节点失败，尝试备用节点
-        log('所有主节点失败，尝试备用节点...');
-        logError(primaryResult.message);
-        
-        const backupResult = await raceNodes(API_NODES.backup, currentAbortController.signal);
-        
-        if (backupResult.success) {
-            log(`✓ 使用备用节点: ${backupResult.node.name}`);
-            processResults(backupResult.data);
-        } else {
-            logError('所有备用节点也失败了');
-            logError(backupResult.message);
-            container.innerHTML = `
-                <div class="error" style="padding: 40px; text-align: center;">
-                    <h3 style="color: #ff6b6b; margin-bottom: 16px;">所有API请求失败</h3>
-                    <p style="color: #666; margin-bottom: 12px;">主节点: ${primaryResult.failedNodes.join(', ')}</p>
-                    <p style="color: #666; margin-bottom: 20px;">备用节点: ${backupResult.failedNodes.join(', ')}</p>
-                    <p style="color: #999;">请检查网络连接或稍后重试</p>
-                </div>
-            `;
-        }
-    }
-
-    // 处理结果
-    function processResults(data) {
-        if (data.redirect && data.target_url) {
-            alert(data.message || "检测到非中文区域，将跳转到 Greasyfork Official Site");
-            window.location.href = data.target_url;
-            return;
-        }
-        
-        const container = document.getElementById("script-results");
-        if (!container) return;
-
-        if (!data?.length) {
-            container.innerHTML = '<div class="loading">未找到匹配內容</div>';
-            updatePagination(true);
-            return;
-        }
-
-        const items = data.map((item, i) => UI.createResultItem(item)).join('');
-        
-        container.innerHTML = `<ul>${items}</ul>`;
-        
-        updatePagination(false);
-    }
-
-    // 分页更新
-    function updatePagination(noResults = false) {
-        const params = hashManager.get();
-        const currentPage = parseInt(params.page || "1");
-        const pagination = document.getElementById("pagination");
-        if (!pagination) return;
-        
-        const createLink = (page, text, hidden = false) => {
-            const p = { ...params, page: page.toString() };
-            const query = new URLSearchParams(p).toString();
-            const style = hidden ? 'style="visibility:hidden"' : '';
-            return `<a href="#?${query}" ${style}>${text}</a>`;
-        };
-        
-        pagination.innerHTML = `
-            ${createLink(1, '回到第一页', currentPage === 1)}
-            ${createLink(Math.max(currentPage - 1, 1), '上一页', currentPage === 1)}
-            <span class="current">${currentPage}</span>
-            ${createLink(currentPage + 1, '下一页', noResults && currentPage > 1)}
-        `;
-    }
-
-    // 语言筛选初始化
-    function initializeLanguageFilter() {
-        const params = hashManager.get();
-        const filter = params.filter_locale || "0";
-        const container = document.getElementById("language-filter");
-        if (!container) return;
-        
-        const options = [
-            { value: "0", text: "展示所有语言内容" },
-            { value: "1", text: "仅展示中文内容" }
-        ];
-        
-        container.innerHTML = `
-            语言筛选：
-            <ul>
-                ${options.map(opt => `
-                    <li class="list-option ${filter === opt.value ? 'list-current' : ''}">
-                        <a href="#" data-filter="${opt.value}">${opt.text}</a>
-                    </li>
-                `).join('')}
-            </ul>
-        `;
-        
-        container.querySelectorAll('a').forEach(link => {
-            link.addEventListener('click', e => {
-                e.preventDefault();
-                const params = hashManager.get();
-                params.filter_locale = link.dataset.filter;
-                hashManager.set(params);
-                
-                container.querySelectorAll('.list-option').forEach(opt => 
-                    opt.classList.remove('list-current')
-                );
-                link.parentElement.classList.add('list-current');
-                
-                loadResults();
-            });
-        });
-    }
-
-    // 初始化页面
-    function initializePage() {
-        const params = hashManager.get();
-        
-        const searchInput = document.querySelector('.sidebar-search input[name="q"]');
-        if (searchInput) searchInput.value = params.q || '';
-        
-        const sortOptions = [
-            { value: "", text: "相关程度" },
-            { value: "daily_installs", text: "日安装量" },
-            { value: "total_installs", text: "总安装量" },
-            { value: "ratings", text: "得分" },
-            { value: "created", text: "创建日期" },
-            { value: "updated", text: "更新日期" },
-            { value: "name", text: "名称" }
-        ];
-        
-        const sortList = document.getElementById("sort-options-list");
-        if (sortList) {
-            sortList.innerHTML = sortOptions.map(opt => {
-                const isCurrent = opt.value === (params.sort || '');
-                return `
-                    <li class="list-option ${isCurrent ? 'list-current' : ''}">
-                        <a href="#" data-sort="${opt.value}">${opt.text}</a>
-                    </li>
-                `;
-            }).join('');
-            
-            sortList.querySelectorAll('a').forEach(link => {
-                link.addEventListener('click', e => {
-                    e.preventDefault();
-                    const params = hashManager.get();
-                    params.sort = link.dataset.sort;
-                    hashManager.set(params);
-                    
-                    sortList.querySelectorAll('.list-option').forEach(opt =>
-                        opt.classList.toggle('list-current', opt.contains(link))
-                    );
-                    
-                    loadResults();
-                });
-            });
-        }
-        
-        initializeLanguageFilter();
-    }
-
-    // 表单处理
-    function initializeFormHandlers() {
-        const searchForm = document.getElementById("search-form");
-        searchForm?.addEventListener("submit", e => {
-            e.preventDefault();
-            const input = document.getElementById("search-submit");
-            if (!input) return;
-            
-            const query = input.value.trim();
-            hashManager.set({ q: query });
-            loadResults();
-        });
-
-        const sidebarSearch = document.querySelector(".sidebar-search");
-        sidebarSearch?.addEventListener("submit", e => {
-            e.preventDefault();
-            const input = sidebarSearch.querySelector('input[name="q"]');
-            if (!input) return;
-            
-            const params = hashManager.get();
-            hashManager.set({
-                q: input.value.trim(),
-                sort: params.sort || '',
-                filter_locale: params.filter_locale || '0',
-                ...(params.site && { site: params.site })
-            });
-            
-            loadResults();
-        });
-    }
-
-    // 事件监听
-    window.addEventListener("popstate", () => {
-        if (window.location.hash === '#google_vignette') return;
-        initializeLanguageFilter();
-        updatePageTitle();
-        loadResults();
-    });
-
-    window.addEventListener("hashchange", e => {
-        updatePageTitle();
-        const current = window.location.hash;
-        
-        if (current === '#google_vignette') return;
-        if (hashManager.isValid(current)) lastValidHash = current;
-    });
-
-    // 初始化
-    function init() {
-        const hash = window.location.hash;
-        if (hashManager.isValid(hash)) lastValidHash = hash;
-        
-        initializeFormHandlers();
-        initializePage();
-        loadResults();
-    }
-
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
-    } else {
-        init();
-    }
-}();
+(async()=>{
+app=document.getElementById('app');
+const p=getPath(location.hash);
+if(!p){await $(100);showList();return}
+await getIP();
+const c=getCache();
+if(c){
+render(`<div class="icon"><span class="material-icons">verified</span></div><h1>校驗中</h1><p class="desc">正在校驗快取節點...</p><div class="url">${p}</div><div class="st"><div class="st-t">快取節點</div><div class="st-i"><span class="material-icons">cloud_done</span>${dd(c)}</div></div><div class="tip">提示：快取有效期 ${CFG.days} 天${IP?' (IP: '+IP+')':''}</div>`);
+await $(CFG.cto);
+const url=`${c}/scripts/${p}`;
+render(`<div class="icon ok"><span class="material-icons">check_circle</span></div><h1>驗證成功</h1><p class="desc">快取校驗通過，即將自動跳轉</p><div class="badge"><span class="material-icons">bolt</span>快取加速</div><div class="url">${url}</div><a href="${url}" class="btn"><span class="material-icons">open_in_new</span>立即前往</a>`);
+setTimeout(()=>{location.href=url},1e3);
+return;
+}
+render(`<div class="icon"><span class="material-icons">sync</span></div><h1>載入中</h1><p class="desc">正在為您準備最佳連接...</p><div class="url">${p}</div>`);
+await $(CFG.ito);
+await testAll(p);
+})();
